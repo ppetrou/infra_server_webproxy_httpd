@@ -1,0 +1,5 @@
+---
+# vars file for infra_server_webproxy_httpd
+
+ssl_cert_file_filepath: '/etc/pki/tls/certs/proxy.crt'
+ssl_cert_key_filepath: '/etc/pki/tls/private/proxy.key'

@@ -1,0 +1,21 @@
+---
+# defaults file for infra_server_webproxy_httpd
+
+# IP/Port Parameters
+listen_ip: 127.0.0.1
+listen_port: 8080
+
+# SSL Virtual Host Parameters
+ssl_enabled: no
+ssl_cert_autogen: no
+
+# SSL Proxy Parameters
+ssl_proxy: no
+ssl_proxy_verify: no
+ssl_proxy_check_peer_name: no
+ssl_proxy_ca_certificate_file: ''
+
+# Proxy URLS
+proxy_urls:
+  - { source: "", target: "" }
+

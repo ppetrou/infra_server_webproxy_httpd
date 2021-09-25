@@ -1,0 +1,102 @@
+---
+# tasks file for infra_server_webproxy_httpd
+
+# collect facts about system services
+- name: collect facts about system services
+  service_facts:
+  register: services_state
+
+- name: check if firewall is installed
+  set_fact:
+    is_firewall_installed: "{{ services_state.ansible_facts.services['firewalld.service'] is defined }}" 
+
+- name: get firewall status
+  set_fact:
+    is_firewall_running: "{{ services_state.ansible_facts.services['firewalld.service']['state'] == 'running'}}"
+  when:
+    - is_firewall_installed
+
+# install http server
+- name: install http server
+  ansible.builtin.dnf:
+    name: httpd
+    state: present
+
+# install mod_ssl
+- name: install mod_ssl
+  ansible.builtin.dnf:
+    name: mod_ssl
+    state: present
+  when:
+    - ssl_proxy or ssl_enabled
+
+# install python3-cryptography
+- name: install python3-cryptography
+  ansible.builtin.dnf:
+    name: python3-cryptography
+    state: present
+  when:
+    - ssl_enabled
+
+# generate certificates if required
+- name: generate certificates if required
+  block:
+    - name: generate an openssl private key
+      community.crypto.openssl_privatekey:
+        path: "{{ ssl_cert_key_filepath }}"
+    
+    - name: generate certificate
+      community.crypto.x509_certificate:
+        select_crypto_backend: cryptography
+        path: "{{ ssl_cert_file_filepath }}"
+        privatekey_path: "{{ ssl_cert_key_filepath }}"
+        provider: selfsigned
+  when:
+    - ssl_enabled
+    - ssl_cert_autogen
+
+# render virtualhost for proxy
+- name: render virtual host for the http proxy
+  vars:
+    t_listen_ip: "{{ listen_ip }}"
+    t_listen_port: "{{ listen_port }}"
+    t_ssl_enabled: "{{ ssl_enabled }}"
+    t_ssl_cert_file_filepath: "{{ ssl_cert_file_filepath }}"
+    t_ssl_cert_key_filepath: "{{ ssl_cert_key_filepath }}"
+    t_ssl_proxy: "{{ ssl_proxy }}"
+    t_ssl_proxy_verify: "{{ ssl_proxy_verify }}"
+    t_ssl_proxy_check_peer_name: "{{ ssl_proxy_check_peer_name }}"
+    t_ssl_proxy_ca_certificate_filepath: "{{ ssl_proxy_ca_certificate_file }}"
+    t_proxy_urls: "{{ proxy_urls }}"
+  ansible.builtin.template:
+    src: proxy_virtual_host.j2
+    dest: /etc/httpd/conf.d/http_proxy.conf
+
+# enable and start the service
+- name: Enable and start the service
+  ansible.builtin.service:
+    name: httpd
+    state: restarted
+    enabled: yes
+
+# setup firewall
+- name: setup firewall
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: yes
+    immediate: yes
+    state: enabled
+  loop:
+    - "{{ listen_port }}/tcp"
+  when:
+    - is_firewall_installed
+    - is_firewall_running
+
+# set httpd_can_network_connect flag on and keep it persistent across reboots
+- name: set httpd_can_network_connect flag on and keep it persistent across reboots
+  ansible.posix.seboolean:
+    name: httpd_can_network_connect
+    state: yes
+    persistent: yes
+
+
