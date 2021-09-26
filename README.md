@@ -18,8 +18,6 @@ Releases
 Role Variables
 --------------
 
-
-**top level vars**
 |Variable|Level|Type|Description
 |---|---|---|---		
 |listen_ip|Default|string|The listening ip of the Virtual Host for the proxy
