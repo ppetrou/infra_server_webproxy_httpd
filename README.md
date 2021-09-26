@@ -1,4 +1,4 @@
-Role Name
+infra_server_webproxy_httpd
 =========
 
 A simple role to setup an http proxy
