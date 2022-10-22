@@ -69,8 +69,8 @@
     t_ssl_proxy_ca_certificate_filepath: "{{ ssl_proxy_ca_certificate_file }}"
     t_proxy_urls: "{{ proxy_urls }}"
   ansible.builtin.template:
-    src: forward_proxy_virtual_host.j2
-    dest: /etc/httpd/conf.d/http_proxy.conf
+    src: reverse_proxy_virtual_host.j2
+    dest: /etc/httpd/conf.d/http_reverse_proxy.conf
 
 # render virtualhost for proxy
 - name: render virtual host for the forward http proxy
@@ -80,7 +80,7 @@
     t_allowed_ip: "{{ allowed_ip }}"
   ansible.builtin.template:
     src: forward_proxy_virtual_host.j2
-    dest: /etc/httpd/conf.d/http_proxy.conf
+    dest: /etc/httpd/conf.d/http_forward_proxy.conf
 
 # enable and start the service
 - name: Enable and start the service

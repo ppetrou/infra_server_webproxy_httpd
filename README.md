@@ -3,6 +3,8 @@ infra_server_webproxy_httpd
 
 A simple role to setup an http forward / reverse proxy
 
+See https://stackoverflow.com/questions/17079670/httpd-server-not-started-13permission-denied-make-sock-could-not-bind-to-ad for ports selinux
+
 Requirements
 ------------
 NA
