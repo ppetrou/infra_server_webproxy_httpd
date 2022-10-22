@@ -8,7 +8,7 @@
 
 - name: check if firewall is installed
   set_fact:
-    is_firewall_installed: "{{ services_state.ansible_facts.services['firewalld.service'] is defined }}" 
+    is_firewall_installed: "{{ services_state.ansible_facts.services['firewalld.service'] is defined }}"
 
 - name: get firewall status
   set_fact:
@@ -44,7 +44,7 @@
     - name: generate an openssl private key
       community.crypto.openssl_privatekey:
         path: "{{ ssl_cert_key_filepath }}"
-    
+
     - name: generate certificate
       community.crypto.x509_certificate:
         select_crypto_backend: cryptography
@@ -56,10 +56,10 @@
     - ssl_cert_autogen
 
 # render virtualhost for proxy
-- name: render virtual host for the http proxy
+- name: render virtual host for the reverse http proxy
   vars:
     t_listen_ip: "{{ listen_ip }}"
-    t_listen_port: "{{ listen_port }}"
+    t_reverse_listen_port: "{{ reverse_listen_port }}"
     t_ssl_enabled: "{{ ssl_enabled }}"
     t_ssl_cert_file_filepath: "{{ ssl_cert_file_filepath }}"
     t_ssl_cert_key_filepath: "{{ ssl_cert_key_filepath }}"
@@ -69,7 +69,17 @@
     t_ssl_proxy_ca_certificate_filepath: "{{ ssl_proxy_ca_certificate_file }}"
     t_proxy_urls: "{{ proxy_urls }}"
   ansible.builtin.template:
-    src: proxy_virtual_host.j2
+    src: forward_proxy_virtual_host.j2
+    dest: /etc/httpd/conf.d/http_proxy.conf
+
+# render virtualhost for proxy
+- name: render virtual host for the forward http proxy
+  vars:
+    t_listen_ip: "{{ listen_ip }}"
+    t_forward_listen_port: "{{ forward_listen_port }}"
+    t_allowed_ip: "{{ allowed_ip }}"
+  ansible.builtin.template:
+    src: forward_proxy_virtual_host.j2
     dest: /etc/httpd/conf.d/http_proxy.conf
 
 # enable and start the service
@@ -87,10 +97,17 @@
     immediate: yes
     state: enabled
   loop:
-    - "{{ listen_port }}/tcp"
+    - "{{ forward_listen_port }}/tcp"
+    - "{{ reverse_listen_port }}/tcp"
   when:
     - is_firewall_installed
     - is_firewall_running
+
+# install python3-libsemanage
+- name: install python3-libsemanage
+  ansible.builtin.dnf:
+    name: python3-libsemanage
+    state: present
 
 # set httpd_can_network_connect flag on and keep it persistent across reboots
 - name: set httpd_can_network_connect flag on and keep it persistent across reboots
@@ -98,5 +115,3 @@
     name: httpd_can_network_connect
     state: yes
     persistent: yes
-
-

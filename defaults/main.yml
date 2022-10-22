@@ -3,7 +3,9 @@
 
 # IP/Port Parameters
 listen_ip: 127.0.0.1
-listen_port: 8080
+forwad_listen_port: 8080
+reverse_listen_port: 8088
+allowed_ip: ''
 
 # SSL Virtual Host Parameters
 ssl_enabled: no
@@ -18,4 +20,3 @@ ssl_proxy_ca_certificate_file: ''
 # Proxy URLS
 proxy_urls:
   - { source: "", target: "" }
-

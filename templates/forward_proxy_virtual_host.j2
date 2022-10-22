@@ -1,0 +1,12 @@
+<VirtualHost {{ t_listen_ip }}:{{ t_forward_listen_port }}>
+
+    ProxyRequests On
+    ProxyVia On
+    ProxyTimeout 60
+
+    <Proxy *>
+      Require local
+      Require ip {{ t_allowed_ip }}
+    </Proxy>
+
+</VirtualHost>
