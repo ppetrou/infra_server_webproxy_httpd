@@ -82,6 +82,16 @@
     src: forward_proxy_virtual_host.j2
     dest: /etc/httpd/conf.d/http_forward_proxy.conf
 
+# Add Listen Directives for the VirtualHosts
+- name: Add Listen Directives for the VirtualHosts
+  ansible.builtin.lineinfile:
+    path: /etc/httpd/conf/httpd.conf
+    regexp: '^Listen {{ item }}'
+    line: 'Listen {{ item }}'
+  loop:
+    - "{{ forwad_listen_port }}"
+    - "{{ reverse_listen_port }}"
+
 # enable and start the service
 - name: Enable and start the service
   ansible.builtin.service:
