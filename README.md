@@ -45,7 +45,7 @@ The following collections are pre-requisites:
 
 The following python modules are pre-requisites on the target host:
 
-- policycoreutils-python
+- python3-policycoreutils
 - python3-libselinux
 
 Example Playbook
