@@ -1,5 +1,8 @@
 <VirtualHost {{ t_listen_ip }}:{{ t_reverse_listen_port }}>
 
+    ErrorLog "logs/error_reverse_proxy_log"
+    CustomLog "logs/access_reverse_proxy_log" combined
+
     {% if t_ssl_enabled %}
     SSLEngine on
 

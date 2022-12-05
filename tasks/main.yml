@@ -30,6 +30,12 @@
   when:
     - ssl_proxy or ssl_enabled
 
+# install python3-policycoreutils
+- name: install python3-policycoreutils
+  ansible.builtin.dnf:
+    name:  python3-policycoreutils
+    state: present
+
 # install python3-cryptography
 - name: install python3-cryptography
   ansible.builtin.dnf:
@@ -55,7 +61,27 @@
     - ssl_enabled
     - ssl_cert_autogen
 
-# render virtualhost for proxy
+# Render Landing Page
+- name: render landing page
+  vars:
+    t_listen_ip: "{{ listen_ip }}"
+    t_forward_listen_port: "{{ forward_listen_port }}"
+    t_reverse_listen_port: "{{ reverse_listen_port }}"
+  ansible.builtin.template:
+    src: index.html.j2
+    dest: /var/www/html/index.html
+
+# Render httpd.conf
+- name: render httpd.conf
+  vars:
+    t_listen_ip: "{{ listen_ip }}"
+    t_forward_listen_port: "{{ forward_listen_port }}"
+    t_reverse_listen_port: "{{ reverse_listen_port }}"
+  ansible.builtin.template:
+    src: httpd.conf.j2
+    dest: /etc/httpd/conf/httpd.conf
+
+# render virtualhost for reverse proxy
 - name: render virtual host for the reverse http proxy
   vars:
     t_listen_ip: "{{ listen_ip }}"
@@ -72,7 +98,7 @@
     src: reverse_proxy_virtual_host.j2
     dest: /etc/httpd/conf.d/http_reverse_proxy.conf
 
-# render virtualhost for proxy
+# render virtualhost for forward proxy
 - name: render virtual host for the forward http proxy
   vars:
     t_listen_ip: "{{ listen_ip }}"
@@ -82,15 +108,15 @@
     src: forward_proxy_virtual_host.j2
     dest: /etc/httpd/conf.d/http_forward_proxy.conf
 
-# Add Listen Directives for the VirtualHosts
-- name: Add Listen Directives for the VirtualHosts
-  ansible.builtin.lineinfile:
-    path: /etc/httpd/conf/httpd.conf
-    regexp: '^Listen {{ item }}'
-    line: 'Listen {{ item }}'
-  loop:
-    - "{{ forwad_listen_port }}"
-    - "{{ reverse_listen_port }}"
+# allow apache to listen on proxy ports
+- name: allow apache to listen on proxy ports
+  community.general.seport:
+    ports: 
+      - "{{ forward_listen_port }}"
+      - "{{ reverse_listen_port }}"
+    proto: tcp
+    setype: http_port_t
+    state: present
 
 # enable and start the service
 - name: Enable and start the service
@@ -125,3 +151,5 @@
     name: httpd_can_network_connect
     state: yes
     persistent: yes
+
+

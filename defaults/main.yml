@@ -2,9 +2,9 @@
 # defaults file for infra_server_webproxy_httpd
 
 # IP/Port Parameters
-listen_ip: 127.0.0.1
-forwad_listen_port: 8080
-reverse_listen_port: 8088
+listen_ip: ''
+forward_listen_port: ''
+reverse_listen_port: ''
 allowed_ip: ''
 
 # SSL Virtual Host Parameters

@@ -3,8 +3,6 @@ infra_server_webproxy_httpd
 
 A simple role to setup an http forward / reverse proxy
 
-See https://stackoverflow.com/questions/17079670/httpd-server-not-started-13permission-denied-make-sock-could-not-bind-to-ad for ports selinux
-
 Requirements
 ------------
 NA
@@ -40,11 +38,15 @@ Role Variables
 Dependencies
 ------------
 
-The following two collections are pre-requisites.
+The following collections are pre-requisites:
 
 - community.crypto
 - ansible.posix
 
+The following python modules are pre-requisites on the target host:
+
+- policycoreutils-python
+- python3-libselinux
 
 Example Playbook
 ----------------

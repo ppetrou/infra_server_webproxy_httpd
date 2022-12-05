@@ -1,4 +1,7 @@
 <VirtualHost {{ t_listen_ip }}:{{ t_forward_listen_port }}>
+    
+    ErrorLog "logs/error_forward_proxy_log"
+    CustomLog "logs/access_forward_proxy_log" combined
 
     ProxyRequests On
     ProxyVia On
