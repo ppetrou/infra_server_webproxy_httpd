@@ -22,51 +22,23 @@
     name: httpd
     state: present
 
-# install mod_ssl
-- name: install mod_ssl
-  ansible.builtin.dnf:
-    name: mod_ssl
-    state: present
-  when:
-    - ssl_proxy or ssl_enabled
-
 # install python3-policycoreutils
 - name: install python3-policycoreutils
   ansible.builtin.dnf:
     name:  python3-policycoreutils
     state: present
 
-# install python3-cryptography
-- name: install python3-cryptography
+# install python3-libsemanage
+- name: install python3-libsemanage
   ansible.builtin.dnf:
-    name: python3-cryptography
+    name: python3-libsemanage
     state: present
-  when:
-    - ssl_enabled
-
-# generate certificates if required
-- name: generate certificates if required
-  block:
-    - name: generate an openssl private key
-      community.crypto.openssl_privatekey:
-        path: "{{ ssl_cert_key_filepath }}"
-
-    - name: generate certificate
-      community.crypto.x509_certificate:
-        select_crypto_backend: cryptography
-        path: "{{ ssl_cert_file_filepath }}"
-        privatekey_path: "{{ ssl_cert_key_filepath }}"
-        provider: selfsigned
-  when:
-    - ssl_enabled
-    - ssl_cert_autogen
 
 # Render Landing Page
 - name: render landing page
   vars:
     t_listen_ip: "{{ listen_ip }}"
-    t_forward_listen_port: "{{ forward_listen_port }}"
-    t_reverse_listen_port: "{{ reverse_listen_port }}"
+    t_listen_port: "{{ listen_port }}"
   ansible.builtin.template:
     src: index.html.j2
     dest: /var/www/html/index.html
@@ -75,48 +47,165 @@
 - name: render httpd.conf
   vars:
     t_listen_ip: "{{ listen_ip }}"
-    t_forward_listen_port: "{{ forward_listen_port }}"
-    t_reverse_listen_port: "{{ reverse_listen_port }}"
+    t_listen_port: "{{ listen_port }}"
   ansible.builtin.template:
     src: httpd.conf.j2
     dest: /etc/httpd/conf/httpd.conf
 
-# render virtualhost for reverse proxy
-- name: render virtual host for the reverse http proxy
-  vars:
-    t_listen_ip: "{{ listen_ip }}"
-    t_reverse_listen_port: "{{ reverse_listen_port }}"
-    t_ssl_enabled: "{{ ssl_enabled }}"
-    t_ssl_cert_file_filepath: "{{ ssl_cert_file_filepath }}"
-    t_ssl_cert_key_filepath: "{{ ssl_cert_key_filepath }}"
-    t_ssl_proxy: "{{ ssl_proxy }}"
-    t_ssl_proxy_verify: "{{ ssl_proxy_verify }}"
-    t_ssl_proxy_check_peer_name: "{{ ssl_proxy_check_peer_name }}"
-    t_ssl_proxy_ca_certificate_filepath: "{{ ssl_proxy_ca_certificate_file }}"
-    t_proxy_urls: "{{ proxy_urls }}"
-  ansible.builtin.template:
-    src: reverse_proxy_virtual_host.j2
-    dest: /etc/httpd/conf.d/http_reverse_proxy.conf
+# Cleanup old virtual host proxies
+- name: Cleanup old virtual host proxies
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/httpd/conf.d/http_forward_proxy.conf
+    - /etc/httpd/conf.d/http_reverse_proxy.conf
 
-# render virtualhost for forward proxy
-- name: render virtual host for the forward http proxy
-  vars:
-    t_listen_ip: "{{ listen_ip }}"
-    t_forward_listen_port: "{{ forward_listen_port }}"
-    t_allowed_ip: "{{ allowed_ip }}"
-  ansible.builtin.template:
-    src: forward_proxy_virtual_host.j2
-    dest: /etc/httpd/conf.d/http_forward_proxy.conf
+# Setup Forward Proxy
+- name: Setup Forward Proxy
+  block:
 
-# allow apache to listen on proxy ports
-- name: allow apache to listen on proxy ports
-  community.general.seport:
-    ports: 
-      - "{{ forward_listen_port }}"
-      - "{{ reverse_listen_port }}"
-    proto: tcp
-    setype: http_port_t
-    state: present
+    # Update httpd.conf with Listen Directive for Forward Proxy
+    - name: Update httpd.conf with Listen Directive for Forward Proxy
+      ansible.builtin.lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        insertafter: '^Listen '
+        line: Listen {{ forward_proxy.listen_port }}
+    
+    # Update index.html with Forward Proxy Info
+    - name: Update index.html with Forward Proxy Info
+      ansible.builtin.lineinfile:
+        path: /var/www/html/index.html
+        regexp: '^FORWARD REQUESTS'
+        line: "FORWARD REQUESTS: {{ listen_ip }}:{{ forward_proxy.listen_port }}"
+
+    # render virtualhost for forward proxy
+    - name: render virtual host for the forward http proxy
+      vars:
+        t_listen_ip: "{{ listen_ip }}"
+        t_forward_listen_port: "{{ forward_proxy.listen_port }}"
+        t_allowed_ip: "{{ forward_proxy.allowed_ip }}"
+      ansible.builtin.template:
+        src: forward_proxy_virtual_host.j2
+        dest: /etc/httpd/conf.d/http_forward_proxy.conf
+    
+    # allow apache to listen on proxy ports
+    - name: allow apache to listen on reverse proxy port
+      community.general.seport:
+        ports: 
+          - "{{ forward_proxy.listen_port }}"
+        proto: tcp
+        setype: http_port_t
+        state: present
+    
+    # setup firewall
+    - name: setup firewall for reverse proxy port
+      ansible.posix.firewalld:
+        port: "{{ item }}"
+        permanent: yes
+        immediate: yes
+        state: enabled
+      loop:
+        - "{{ forward_proxy.listen_port }}/tcp"
+      when:
+        - is_firewall_installed
+        - is_firewall_running
+
+  when:
+    - forward_proxy.enabled
+
+# Setup Reverse Proxy
+- name: Setup Reverse Proxy
+  block:
+
+    # install mod_ssl
+    - name: install mod_ssl
+      ansible.builtin.dnf:
+        name: mod_ssl
+        state: present
+      when:
+        - reverse_proxy.ssl_proxy or reverse_proxy.ssl_enabled
+  
+    # install python3-cryptography
+    - name: install python3-cryptography
+      ansible.builtin.dnf:
+        name: python3-cryptography
+        state: present
+      when:
+        - reverse_proxy.ssl_enabled
+
+    # generate certificates if required
+    - name: generate certificates if required
+      block:
+        - name: generate an openssl private key
+          community.crypto.openssl_privatekey:
+            path: "{{ reverse_proxy.ssl_cert_key_filepath }}"
+
+        - name: generate certificate
+          community.crypto.x509_certificate:
+            select_crypto_backend: cryptography
+            path: "{{ reverse_proxy.ssl_cert_file_filepath }}"
+            privatekey_path: "{{ reverse_proxy.ssl_cert_key_filepath }}"
+            provider: selfsigned
+      when:
+        - reverse_proxy.ssl_enabled
+        - reverse_proxy.ssl_cert_autogen
+    
+    # Update httpd.conf with Listen Directive for Reverse Proxy
+    - name: Update httpd.conf with Listen Directive for Reverse Proxy
+      ansible.builtin.lineinfile:
+        path: /etc/httpd/conf/httpd.conf
+        insertafter: '^Listen '
+        line: Listen {{ reverse_proxy.listen_port }}
+    
+    # Update index.html with Reverse Proxy Info
+    - name: Update index.html with Reverse Proxy Info
+      ansible.builtin.lineinfile:
+        path: /var/www/html/index.html
+        regexp: '^REVERSE REQUESTS'
+        line: "REVERSE REQUESTS: {{ listen_ip }}:{{ reverse_proxy.listen_port }}"
+
+    # render virtualhost for reverse proxy
+    - name: render virtual host for the reverse http proxy
+      vars:
+        t_listen_ip: "{{ listen_ip }}"
+        t_reverse_listen_port: "{{ reverse_proxy.listen_port }}"
+        t_ssl_enabled: "{{ reverse_proxy.ssl_enabled }}"
+        t_ssl_cert_file_filepath: "{{ reverse_proxy.ssl_cert_file_filepath }}"
+        t_ssl_cert_key_filepath: "{{ reverse_proxy.ssl_cert_key_filepath }}"
+        t_ssl_proxy: "{{ reverse_proxy.ssl_proxy }}"
+        t_ssl_proxy_verify: "{{ reverse_proxy.ssl_proxy_verify }}"
+        t_ssl_proxy_check_peer_name: "{{ reverse_proxy.ssl_proxy_check_peer_name }}"
+        t_ssl_proxy_ca_certificate_filepath: "{{ reverse_proxy.ssl_proxy_ca_certificate_file }}"
+        t_proxy_urls: "{{ reverse_proxy.proxy_urls }}"
+      ansible.builtin.template:
+        src: reverse_proxy_virtual_host.j2
+        dest: /etc/httpd/conf.d/http_reverse_proxy.conf
+    
+    # allow apache to listen on proxy ports
+    - name: allow apache to listen on reverse proxy port
+      community.general.seport:
+        ports: 
+          - "{{ reverse_proxy.listen_port }}"
+        proto: tcp
+        setype: http_port_t
+        state: present
+    
+    # setup firewall
+    - name: setup firewall for reverse proxy port
+      ansible.posix.firewalld:
+        port: "{{ item }}"
+        permanent: yes
+        immediate: yes
+        state: enabled
+      loop:
+        - "{{ reverse_proxy.listen_port }}/tcp"
+      when:
+        - is_firewall_installed
+        - is_firewall_running
+
+  when:
+    - reverse_proxy.enabled
 
 # enable and start the service
 - name: Enable and start the service
@@ -124,26 +213,6 @@
     name: httpd
     state: restarted
     enabled: yes
-
-# setup firewall
-- name: setup firewall
-  ansible.posix.firewalld:
-    port: "{{ item }}"
-    permanent: yes
-    immediate: yes
-    state: enabled
-  loop:
-    - "{{ forward_listen_port }}/tcp"
-    - "{{ reverse_listen_port }}/tcp"
-  when:
-    - is_firewall_installed
-    - is_firewall_running
-
-# install python3-libsemanage
-- name: install python3-libsemanage
-  ansible.builtin.dnf:
-    name: python3-libsemanage
-    state: present
 
 # set httpd_can_network_connect flag on and keep it persistent across reboots
 - name: set httpd_can_network_connect flag on and keep it persistent across reboots

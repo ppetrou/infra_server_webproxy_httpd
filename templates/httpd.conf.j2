@@ -42,9 +42,7 @@ ServerRoot "/etc/httpd"
 # prevent Apache from glomming onto all bound IP addresses.
 #
 #Listen 12.34.56.78:80
-Listen {{ t_listen_ip }}:80
-Listen {{ t_listen_ip }}:{{ t_forward_listen_port }}
-Listen {{ t_listen_ip }}:{{ t_reverse_listen_port }}
+Listen {{ t_listen_ip }}:{{ t_listen_port }}
 
 #
 # Dynamic Shared Object (DSO) Support
